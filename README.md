@@ -12,3 +12,15 @@ Initialization & checksum steps;
 - Version compatibility check
 - Dashboard init
 ```
+
+# **Repo insctructions**
+
+## **Builds:**
+### **pathfinder**: Onboard rp2040 build
+
+---
+
+## **Demo builds;**
+### **socketClient**: Socket client demo executable
+### **socketDemo**: TCP socket host executable
+
