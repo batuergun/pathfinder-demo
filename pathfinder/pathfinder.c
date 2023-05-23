@@ -51,7 +51,7 @@ int main()
 
     // Serial port configuration
     uart_inst_t *uart_instance = uart1; // Use UART1 for port 16 and 17
-    const int baud_rate = 9600;
+    const int baud_rate = 115200;
 
     // Initialize the UART
     uart_init(uart_instance, baud_rate);
@@ -79,28 +79,35 @@ int main()
 
             if (c == startMarker)
             {
-                // Start of a new packet, reset the buffer
+                // Start of a new packet, reset the buffer and index
                 memset(receivedMsg, 0, sizeof(receivedMsg));
                 receivedIndex = 0;
                 isUARTDataReceived = true;
+                printf("Received new packet\n");
             }
             else if (c == endMarker && isUARTDataReceived)
             {
-                // End of the packet, process the received motor values
+                // End of the packet, process the received data
+                printf("Received data: %s\n", receivedMsg);
+
+                // Tokenize the received data to extract motor values
+                char *token;
+                token = strtok(receivedMsg, ",");
                 int motorIndex = 0;
-                char *token = strtok(receivedMsg, ",");
                 while (token != NULL && motorIndex < MOTOR_COUNT)
                 {
-                    motorValues[motorIndex] = atoi(token);
-                    motorIndex++;
+                    motorValues[motorIndex] = strtol(token, NULL, 16);
+                    printf("Motor %d value: %d\n", motorIndex, motorValues[motorIndex]);
                     token = strtok(NULL, ",");
+                    motorIndex++;
                 }
 
                 // Update the motor values based on the received packet
                 set_motor_values(motorValues);
 
-                // Reset the flags
+                // Reset the flags and received index
                 isUARTDataReceived = false;
+                receivedIndex = 0;
             }
             else if (isUARTDataReceived)
             {
@@ -119,8 +126,10 @@ int main()
 
             // Update the motor values
             set_motor_values(motorValues);
+            printf("No UART input received. Setting motor values to 50.\n");
         }
     }
+
     return 0;
 }
 
