@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define MOTOR_COUNT 8
+#define UART_BUFFER_SIZE 256
 
 // Function declaration
 double map_motor_value(int value);
@@ -68,15 +69,30 @@ int main()
     // Custom framing variables
     char startMarker = '{';
     char endMarker = '}';
-    char receivedMsg[256];
+    char receivedMsg[UART_BUFFER_SIZE];
     bool isUARTDataReceived = false;
     int receivedIndex = 0;
 
+    // FIFO buffer variables
+    char fifoBuffer[UART_BUFFER_SIZE];
+    int fifoHead = 0;
+    int fifoTail = 0;
+
     while (true)
     {
+        // Read incoming UART data and fill the FIFO buffer
         while (uart_is_readable(uart_instance))
         {
             char c = uart_getc(uart_instance);
+            fifoBuffer[fifoHead] = c;
+            fifoHead = (fifoHead + 1) % UART_BUFFER_SIZE;
+        }
+
+        // Process characters in the FIFO buffer
+        while (fifoHead != fifoTail)
+        {
+            char c = fifoBuffer[fifoTail];
+            fifoTail = (fifoTail + 1) % UART_BUFFER_SIZE;
 
             if (c == startMarker)
             {
@@ -97,7 +113,7 @@ int main()
                 int motorIndex = 0;
                 while (token != NULL && motorIndex < MOTOR_COUNT)
                 {
-                    motorValues[motorIndex] = strtol(token, NULL, 16);
+                    motorValues[motorIndex] = atoi(token);
                     printf("Motor %d value: %d\n", motorIndex, motorValues[motorIndex]);
                     token = strtok(NULL, ",");
                     motorIndex++;
@@ -114,6 +130,7 @@ int main()
             {
                 // Append the received character to the buffer
                 receivedMsg[receivedIndex++] = c;
+                receivedMsg[receivedIndex] = '\0'; // Null-terminate the string
             }
         }
 
