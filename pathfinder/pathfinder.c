@@ -50,16 +50,17 @@ int main()
     }
 
     // Serial port configuration
-    uart_inst_t *uart_instance = uart1; // Use UART1 for port 16 and 17
-    const int baud_rate = 115200;
+    uart_inst_t *uart_instance = uart0; // Use UART1 for port 16 and 17
+    const int baud_rate = 9600;
 
     // Initialize the UART
     uart_init(uart_instance, baud_rate);
     gpio_set_function(16, GPIO_FUNC_UART); // Set GPIO 16 as UART RX
     gpio_set_function(17, GPIO_FUNC_UART); // Set GPIO 17 as UART TX
+    uart_set_hw_flow(uart_instance, false, false);
 
     // Set up the UART data format
-    uart_set_format(uart_instance, 8, UART_PARITY_NONE, 1);
+    uart_set_format(uart_instance, 8, 1, UART_PARITY_NONE);
 
     // Motor values received over serial will be stored in this array
     int motorValues[MOTOR_COUNT] = {0};
