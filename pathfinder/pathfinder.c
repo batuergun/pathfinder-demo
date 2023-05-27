@@ -29,7 +29,7 @@ void set_motor_values(const int *motorValues)
 
 double map_motor_value(int value)
 {
-    double mappedValue = 6.25 + (value / 100.0) * 2.0;
+    double mappedValue = 6.25 + ((value / 100.0) * 2.5);
     return mappedValue;
 }
 
