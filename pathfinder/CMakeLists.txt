@@ -11,6 +11,6 @@ add_executable(pathfinder
 pico_enable_stdio_usb(pathfinder 1)
 pico_enable_stdio_uart(pathfinder 1)
 
-target_link_libraries(pathfinder pico_stdlib hardware_pwm hardware_uart)
+target_link_libraries(pathfinder pico_stdlib hardware_pwm hardware_i2c)
 
 pico_add_extra_outputs(pathfinder) 
