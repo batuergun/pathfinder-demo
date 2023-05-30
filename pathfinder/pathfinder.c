@@ -1,84 +1,78 @@
-#include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
-#include "hardware/pwm.h"
+#include "hardware/irq.h"
+#include <stdio.h>
 
-#define I2C_CLIENT_ADDRESS 0x10
-#define MOTOR_COUNT 8
+#define I2C_SLAVE_ADDRESS 0x10
+#define BUFFER_SIZE 4
 
-// Function to map a value from one range to another
-double map(double value, double in_min, double in_max, double out_min, double out_max)
+volatile uint8_t motorData[BUFFER_SIZE]; // Buffer for motor data
+volatile size_t bytesReceived = 0;       // Bytes received counter
+
+void i2c_irq_handler()
 {
-    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
+    uint32_t status = i2c0_hw->intr_stat;
 
-// Function to set the PWM frequency and duty cycle
-uint32_t pwm_set_freq_duty(uint slice_num, uint chan, uint32_t f, double d)
-{
-    uint32_t clock = 125000000;
-    uint32_t divider16 = clock / f / 4096 + (clock % (f * 4096) != 0);
-    if (divider16 / 16 == 0)
-        divider16 = 16;
-    uint32_t wrap = clock * 16 / divider16 / f - 1;
-    pwm_set_clkdiv_int_frac(slice_num, divider16 / 16, divider16 & 0xF);
-    pwm_set_wrap(slice_num, wrap);
-    pwm_set_chan_level(slice_num, chan, wrap * d / 100);
-    return wrap;
+    if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS)
+    {
+        // Read request interrupt
+        if (bytesReceived < BUFFER_SIZE)
+        {
+            i2c0_hw->data_cmd = motorData[bytesReceived++];
+        }
+        else
+        {
+            i2c0_hw->data_cmd = 0; // Send dummy byte if no more data available
+        }
+    }
+
+    if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS)
+    {
+        // Receive FIFO full interrupt
+        while (i2c0_hw->status & I2C_IC_STATUS_RFNE_BITS)
+        {
+            motorData[bytesReceived++] = i2c0_hw->data_cmd;
+            if (bytesReceived >= BUFFER_SIZE)
+            {
+                // Process motor data
+                printf("Motor Data: ");
+                for (int i = 0; i < BUFFER_SIZE; i++)
+                {
+                    printf("%d ", motorData[i]);
+                }
+                printf("\n");
+
+                bytesReceived = 0; // Reset byte counter
+            }
+        }
+    }
+
+    i2c0_hw->intr_mask = status; // Clear interrupt status
 }
 
 int main()
 {
     stdio_init_all();
 
-    i2c_init(i2c0, 100000);                             // Initialize I2C at 100kHz
-    gpio_set_function(16, GPIO_FUNC_I2C);               // Set GP16 as SDA
-    gpio_set_function(17, GPIO_FUNC_I2C);               // Set GP17 as SCL
-    i2c_set_slave_mode(i2c0, true, I2C_CLIENT_ADDRESS); // Set Pico as I2C client/server
+    // Initialize the I2C peripheral
+    i2c_init(i2c0, 100000);
+    gpio_set_function(16, GPIO_FUNC_I2C);
+    gpio_set_function(17, GPIO_FUNC_I2C);
+    gpio_pull_up(16);
+    gpio_pull_up(17);
 
-    uint8_t data[8];
+    // Set the I2C slave address
+    i2c_set_slave_mode(i2c0, true, I2C_SLAVE_ADDRESS);
 
-    // Initialize PWM
-    // Configure GPIO pins 3 to 10 for PWM
-    for (int pin = 2; pin <= 9; ++pin)
-    {
-        gpio_set_function(pin, GPIO_FUNC_PWM);
-    }
-
-    for (int i = 0; i < MOTOR_COUNT; ++i)
-    {
-        uint slice_num = pwm_gpio_to_slice_num(i + 2);
-        pwm_set_enabled(slice_num, true);
-    }
+    // Enable I2C interrupts
+    irq_set_enabled(I2C0_IRQ, true);
+    irq_set_priority(I2C0_IRQ, 1);
+    i2c0_hw->intr_mask = I2C_IC_INTR_MASK_M_RD_REQ_BITS | I2C_IC_INTR_MASK_M_RX_FULL_BITS;
+    irq_set_exclusive_handler(I2C0_IRQ, i2c_irq_handler);
 
     while (true)
     {
-        // Receive data from Pi 4
-        i2c_read_blocking(i2c0, I2C_CLIENT_ADDRESS, data, 8, false);
-
-        printf("Received data package: ");
-        for (int i = 0; i < 8; i++)
-        {
-            printf("%d ", data[i]);
-        }
-        printf("\n");
-
-        // Process the received data and write to each motor
-        for (int i = 2; i <= 9; i++)
-        {
-            // Assuming data[i-2] represents the desired duty cycle for motor connected to pin i
-
-            // Map the motor value from 0-100 to the PWM range 6.25-8.75
-            double mappedValue = map(data[i - 2], 0, 100, 6.25, 8.75);
-
-            // Set motor PWM frequency to 1000Hz with mapped duty cycle
-            uint slice_num = pwm_gpio_to_slice_num(i);
-            pwm_set_freq_duty(slice_num, i, 50, mappedValue);
-
-            printf("Motor %d: Frequency = %d Hz, Duty Cycle = %f%%\n", i, 50, mappedValue);
-        }
-
-        // Send a response back to Pi 4
-        i2c_write_blocking(i2c0, I2C_CLIENT_ADDRESS, data, 8, false);
+        tight_loop_contents();
     }
 
     return 0;
