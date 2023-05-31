@@ -1,80 +1,76 @@
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
 #include "hardware/irq.h"
-#include <stdio.h>
 
-#define I2C_SLAVE_ADDRESS 0x10
-#define BUFFER_SIZE 4
+// define I2C addresses to be used for this peripheral
+#define I2C0_PERIPHERAL_ADDR 0x10
 
-volatile uint8_t motorData[BUFFER_SIZE]; // Buffer for motor data
-volatile size_t bytesReceived = 0;       // Bytes received counter
+// GPIO pins to use for I2C
+#define GPIO_SDA0 16
+#define GPIO_SCK0 17
 
-void i2c_irq_handler()
+#define BUFFER_SIZE 8
+uint8_t bytesReceived;
+uint8_t motorData[8];
+
+// Interrupt handler implements the RAM
+void i2c0_irq_handler()
 {
-    uint32_t status = i2c0_hw->intr_stat;
 
-    if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS)
-    {
-        // Read request interrupt
-        if (bytesReceived < BUFFER_SIZE)
-        {
-            i2c0_hw->data_cmd = motorData[bytesReceived++];
-        }
-        else
-        {
-            i2c0_hw->data_cmd = 0; // Send dummy byte if no more data available
-        }
-    }
+    // Get interrupt status
+    uint32_t status = i2c0->hw->intr_stat;
 
     if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS)
     {
-        // Receive FIFO full interrupt
-        while (i2c0_hw->status & I2C_IC_STATUS_RFNE_BITS)
-        {
-            motorData[bytesReceived++] = i2c0_hw->data_cmd;
-            if (bytesReceived >= BUFFER_SIZE)
-            {
-                // Process motor data
-                printf("Motor Data: ");
-                for (int i = 0; i < BUFFER_SIZE; i++)
-                {
-                    printf("%d ", motorData[i]);
-                }
-                printf("\n");
+        // Read the data (this will clear the interrupt)
+        uint32_t value = i2c0->hw->data_cmd;
 
-                bytesReceived = 0; // Reset byte counter
+        motorData[bytesReceived++] = value;
+        if (bytesReceived >= BUFFER_SIZE)
+        {
+            // Process motor data
+            /*
+            printf("Motor Data: ");
+            for (int i = 0; i < BUFFER_SIZE; i++)
+            {
+                printf("%d ", motorData[i]);
             }
+            printf("\n");
+            */
+
+            bytesReceived = 0; // Reset byte counter
         }
     }
-
-    i2c0_hw->intr_mask = status; // Clear interrupt status
 }
 
+// Main loop - initilises system and then loops while interrupts get on with processing the data
 int main()
 {
-    stdio_init_all();
 
-    // Initialize the I2C peripheral
-    i2c_init(i2c0, 100000);
-    gpio_set_function(16, GPIO_FUNC_I2C);
-    gpio_set_function(17, GPIO_FUNC_I2C);
-    gpio_pull_up(16);
-    gpio_pull_up(17);
+    // Setup I2C0 as slave (peripheral)
+    i2c_init(i2c0, 100 * 1000);
+    i2c_set_slave_mode(i2c0, true, I2C0_PERIPHERAL_ADDR);
 
-    // Set the I2C slave address
-    i2c_set_slave_mode(i2c0, true, I2C_SLAVE_ADDRESS);
+    // Setup GPIO pins to use and add pull up resistors
+    gpio_set_function(GPIO_SDA0, GPIO_FUNC_I2C);
+    gpio_set_function(GPIO_SCK0, GPIO_FUNC_I2C);
+    gpio_pull_up(GPIO_SDA0);
+    gpio_pull_up(GPIO_SCK0);
 
-    // Enable I2C interrupts
+    // Enable the I2C interrupts we want to process
+    i2c0->hw->intr_mask = (I2C_IC_INTR_MASK_M_RD_REQ_BITS | I2C_IC_INTR_MASK_M_RX_FULL_BITS);
+
+    // Set up the interrupt handler to service I2C interrupts
+    irq_set_exclusive_handler(I2C0_IRQ, i2c0_irq_handler);
+
+    // Enable I2C interrupt
     irq_set_enabled(I2C0_IRQ, true);
-    irq_set_priority(I2C0_IRQ, 1);
-    i2c0_hw->intr_mask = I2C_IC_INTR_MASK_M_RD_REQ_BITS | I2C_IC_INTR_MASK_M_RX_FULL_BITS;
-    irq_set_exclusive_handler(I2C0_IRQ, i2c_irq_handler);
 
+    // Do nothing in main loop
     while (true)
     {
         tight_loop_contents();
     }
-
     return 0;
 }
 
@@ -105,5 +101,32 @@ for (int i = 0; i < MOTOR_COUNT; ++i)
     uint slice_num = pwm_gpio_to_slice_num(i + 2);
     pwm_set_enabled(slice_num, true);
 }
+
+*/
+
+/*
+
+// Check to see if we have received data from the I2C controller
+    if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS)
+    {
+
+        // Receive FIFO full interrupt
+        while (i2c0_hw->status & I2C_IC_STATUS_RFNE_BITS)
+        {
+            motorData[bytesReceived++] = i2c0_hw->data_cmd;
+            if (bytesReceived >= BUFFER_SIZE)
+            {
+                // Process motor data
+                printf("Motor Data: ");
+                for (int i = 0; i < BUFFER_SIZE; i++)
+                {
+                    printf("%d ", motorData[i]);
+                }
+                printf("\n");
+
+                bytesReceived = 0; // Reset byte counter
+            }
+        }
+    }
 
 */
