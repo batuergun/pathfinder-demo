@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
 #include "hardware/irq.h"
@@ -16,36 +17,46 @@ uint8_t motorData[8];
 // Interrupt handler implements the RAM
 void i2c0_irq_handler()
 {
-
     // Get interrupt status
     uint32_t status = i2c0->hw->intr_stat;
 
     if (status & I2C_IC_INTR_STAT_R_RX_FULL_BITS)
     {
+
         // Read the data (this will clear the interrupt)
         uint32_t value = i2c0->hw->data_cmd;
 
-        motorData[bytesReceived++] = value;
+        motorData[bytesReceived++] = (uint8_t)(value & I2C_IC_DATA_CMD_DAT_BITS);
         if (bytesReceived >= BUFFER_SIZE)
         {
             // Process motor data
-            /*
             printf("Motor Data: ");
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 printf("%d ", motorData[i]);
             }
             printf("\n");
-            */
 
             bytesReceived = 0; // Reset byte counter
         }
+    }
+
+    // Check to see if the I2C controller is requesting data from the RAM
+    if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS)
+    {
+
+        // Write the data from the current address in RAM
+        i2c0->hw->data_cmd = (uint32_t)motorData[7];
+
+        // Clear the interrupt
+        i2c0->hw->clr_rd_req;
     }
 }
 
 // Main loop - initilises system and then loops while interrupts get on with processing the data
 int main()
 {
+    stdio_init_all();
 
     // Setup I2C0 as slave (peripheral)
     i2c_init(i2c0, 100 * 1000);
