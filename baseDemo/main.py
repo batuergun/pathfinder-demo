@@ -19,8 +19,6 @@ for i in range(1, 9):
     slider.pack()
     motor_sliders.append(slider)
 
-default_motor_values = [50] * len(motor_sliders)
-
 # Initialize Pygame and Joystick
 pygame.init()
 pygame.joystick.init()
@@ -33,6 +31,10 @@ else:
     exit(1)
 
 continuous_sending = False
+
+default_motor_values = [50] * len(motor_sliders)
+joystick_deadzone = 0.1
+joystick_offsets = [0.0, 0.0, 0.0, 0.0]
 
 
 def send_motor_values(default_values=False):
@@ -91,6 +93,19 @@ for slider in motor_sliders:
     slider.config(command=update_debug_output)
 
 
+def apply_deadzone_and_offsets(axis_values):
+    global joystick_deadzone, joystick_offsets
+
+    adjusted_values = []
+    for value, offset in zip(axis_values, joystick_offsets):
+        adjusted_value = value + offset
+        if abs(adjusted_value) < joystick_deadzone:
+            adjusted_value = 0.0
+        adjusted_values.append(adjusted_value)
+
+    return adjusted_values
+
+
 def show_default_values_window():
     def update_default_values(dummy_arg=None):
         global default_motor_values
@@ -119,14 +134,13 @@ options_menu.add_command(label="Adjust Default Motor Values",
 
 def update_motor_values_from_joystick():
     # Read the joystick axes
-    left_x_axis = joystick.get_axis(0)
-    left_y_axis = joystick.get_axis(1)
-    right_x_axis = joystick.get_axis(2)
-    right_y_axis = joystick.get_axis(3)
+    raw_axis_values = [joystick.get_axis(i) for i in range(4)]
 
-    # Convert joystick axes values to motor values
-    default_motor_values = [50 + int(50 * axis_value) for axis_value in [
-        left_x_axis, left_y_axis, right_x_axis, right_y_axis]]
+    # Apply deadzone and offsets
+    adjusted_axis_values = apply_deadzone_and_offsets(raw_axis_values)
+
+    default_motor_values = [50 + int(50 * axis_value)
+                            for axis_value in adjusted_axis_values]
 
     # Update the sliders with the new motor values
     for slider, value in zip(motor_sliders, default_motor_values):
@@ -134,6 +148,66 @@ def update_motor_values_from_joystick():
 
     # Update the debug output
     update_debug_output()
+
+
+def show_joystick_settings_window():
+    def update_joystick_settings(dummy_arg=None):
+        global joystick_deadzone, joystick_offsets
+        joystick_deadzone = deadzone_slider.get()
+        joystick_offsets = [slider.get() for slider in offset_sliders]
+
+    joystick_settings_window = tk.Toplevel(window)
+    joystick_settings_window.title("Joystick Settings")
+
+    deadzone_slider = tk.Scale(joystick_settings_window, from_=0, to=1, resolution=0.01, orient=tk.HORIZONTAL,
+                               label="Deadzone", command=update_joystick_settings)
+    deadzone_slider.set(joystick_deadzone)
+    deadzone_slider.pack()
+
+    offset_sliders = []
+    for i in range(4):
+        slider = tk.Scale(joystick_settings_window, from_=-1, to=1, resolution=0.01, orient=tk.HORIZONTAL,
+                          label=f"Offset for Axis {i}", command=update_joystick_settings)
+        slider.set(joystick_offsets[i])
+        slider.pack()
+        offset_sliders.append(slider)
+
+
+# Add a menu option to show the joystick settings window
+options_menu.add_command(label="Joystick Settings",
+                         command=show_joystick_settings_window)
+
+
+def show_joystick_visualization_window():
+    def update_joystick_visualization():
+        # Read the joystick axes
+        raw_axis_values = [joystick.get_axis(i) for i in range(4)]
+
+        # Apply deadzone and offsets
+        adjusted_axis_values = apply_deadzone_and_offsets(raw_axis_values)
+
+        # Update the visualization labels
+        for i, value in enumerate(adjusted_axis_values):
+            axis_labels[i].config(text=f"Axis {i}: {value:.2f}")
+
+        # Schedule the next update
+        visualization_window.after(100, update_joystick_visualization)
+
+    visualization_window = tk.Toplevel(window)
+    visualization_window.title("Joystick Visualization")
+
+    axis_labels = []
+    for i in range(4):
+        label = tk.Label(visualization_window, text=f"Axis {i}: 0.0")
+        label.pack()
+        axis_labels.append(label)
+
+    update_joystick_visualization()
+
+
+# Add a menu option to show the joystick visualization window
+options_menu.add_command(label="Joystick Visualization",
+                         command=show_joystick_visualization_window)
 
 
 def toggle_continuous_sending():
