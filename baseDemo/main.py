@@ -1,5 +1,7 @@
 import tkinter as tk
 import socket
+import pygame
+from pygame.locals import *
 
 TCP_IP = '192.168.1.100'
 TCP_PORT = 8080
@@ -17,6 +19,16 @@ for i in range(1, 9):
     slider.pack()
     motor_sliders.append(slider)
 
+# Initialize Pygame and Joystick
+pygame.init()
+pygame.joystick.init()
+
+if pygame.joystick.get_count() > 0:
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+else:
+    print("No joystick connected")
+    exit(1)
 
 def send_motor_values():
     # Read the current slider values
@@ -48,7 +60,6 @@ def send_motor_values():
         # Close the socket connection
         sock.close()
 
-
 # Create a button to send motor values
 send_button = tk.Button(window, text='Send Motor Values',
                         command=send_motor_values)
@@ -58,7 +69,6 @@ send_button.pack()
 debug_output = tk.Text(window, height=4, width=40)
 debug_output.pack()
 
-
 def update_debug_output(dummy_arg=None):
     # Read the current slider values
     motor_values = [slider.get() for slider in motor_sliders]
@@ -67,10 +77,36 @@ def update_debug_output(dummy_arg=None):
     debug_output.delete(1.0, tk.END)
     debug_output.insert(tk.END, f"Motor values: {motor_values}")
 
-
 # Update the debug output whenever the slider values change
 for slider in motor_sliders:
     slider.config(command=update_debug_output)
 
-# Start the GUI event loop
-window.mainloop()
+def update_motor_values_from_joystick():
+    # Read the joystick axes
+    left_x_axis = joystick.get_axis(0)
+    left_y_axis = joystick.get_axis(1)
+    right_x_axis = joystick.get_axis(2)
+    right_y_axis = joystick.get_axis(3)
+
+    # Convert joystick axes values to motor values
+    motor_values = [50 + int(50 * axis_value) for axis_value in [left_x_axis, left_y_axis, right_x_axis, right_y_axis]]
+
+    # Update the sliders with the new motor values
+    for slider, value in zip(motor_sliders, motor_values):
+        slider.set(value)
+
+    # Update the debug output
+    update_debug_output()
+
+while True:
+    window.update_idletasks()
+    window.update()
+
+    # Process Pygame events
+    for event in pygame.event.get():
+        if event.type == QUIT:
+            pygame.quit()
+            sys.exit()
+
+    # Update motor values from joystick input
+    update_motor_values_from_joystick()
