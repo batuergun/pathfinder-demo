@@ -33,6 +33,7 @@ else:
 continuous_sending = False
 
 default_motor_values = [50] * len(motor_sliders)
+joystick_invert = [False, False, False, False]
 joystick_deadzone = 0.1
 joystick_offsets = [0.0, 0.0, 0.0, 0.0]
 
@@ -94,11 +95,13 @@ for slider in motor_sliders:
 
 
 def apply_deadzone_and_offsets(axis_values):
-    global joystick_deadzone, joystick_offsets
+    global joystick_deadzone, joystick_offsets, joystick_invert
 
     adjusted_values = []
-    for value, offset in zip(axis_values, joystick_offsets):
+    for value, offset, invert in zip(axis_values, joystick_offsets, joystick_invert):
         adjusted_value = value + offset
+        if invert:
+            adjusted_value = -adjusted_value
         if abs(adjusted_value) < joystick_deadzone:
             adjusted_value = 0.0
         adjusted_values.append(adjusted_value)
@@ -152,9 +155,10 @@ def update_motor_values_from_joystick():
 
 def show_joystick_settings_window():
     def update_joystick_settings(dummy_arg=None):
-        global joystick_deadzone, joystick_offsets
+        global joystick_deadzone, joystick_offsets, joystick_invert
         joystick_deadzone = deadzone_slider.get()
         joystick_offsets = [slider.get() for slider in offset_sliders]
+        joystick_invert = [var.get() for var in invert_vars]
 
     joystick_settings_window = tk.Toplevel(window)
     joystick_settings_window.title("Joystick Settings")
@@ -172,6 +176,15 @@ def show_joystick_settings_window():
         slider.pack()
         offset_sliders.append(slider)
 
+    invert_vars = []
+    for i in range(4):
+        var = tk.BooleanVar()
+        var.set(joystick_invert[i])
+        check = tk.Checkbutton(joystick_settings_window, text=f"Invert Axis {i}", variable=var,
+                               command=update_joystick_settings)
+        check.pack()
+        invert_vars.append(var)
+
 
 # Add a menu option to show the joystick settings window
 options_menu.add_command(label="Joystick Settings",
@@ -186,9 +199,17 @@ def show_joystick_visualization_window():
         # Apply deadzone and offsets
         adjusted_axis_values = apply_deadzone_and_offsets(raw_axis_values)
 
-        # Update the visualization labels
-        for i, value in enumerate(adjusted_axis_values):
-            axis_labels[i].config(text=f"Axis {i}: {value:.2f}")
+        # Update the joystick visualization
+        left_stick_x, left_stick_y, right_stick_x, right_stick_y = adjusted_axis_values
+        left_stick_coords = (250 + left_stick_x * 100,
+                             250 - left_stick_y * 100)
+        right_stick_coords = (750 + right_stick_x * 100,
+                              250 - right_stick_y * 100)
+
+        canvas.coords(left_stick_indicator, left_stick_coords[0] - 10, left_stick_coords[1] - 10,
+                      left_stick_coords[0] + 10, left_stick_coords[1] + 10)
+        canvas.coords(right_stick_indicator, right_stick_coords[0] - 10, right_stick_coords[1] - 10,
+                      right_stick_coords[0] + 10, right_stick_coords[1] + 10)
 
         # Schedule the next update
         visualization_window.after(100, update_joystick_visualization)
@@ -196,11 +217,19 @@ def show_joystick_visualization_window():
     visualization_window = tk.Toplevel(window)
     visualization_window.title("Joystick Visualization")
 
-    axis_labels = []
-    for i in range(4):
-        label = tk.Label(visualization_window, text=f"Axis {i}: 0.0")
-        label.pack()
-        axis_labels.append(label)
+    canvas = tk.Canvas(visualization_window, width=1000, height=500)
+    canvas.pack()
+
+    # Draw left stick area
+    canvas.create_oval(150, 150, 350, 350, outline="black")
+    canvas.create_oval(225, 225, 275, 275, outline="black", dash=(2, 2))
+    left_stick_indicator = canvas.create_oval(240, 240, 260, 260, fill="black")
+
+    # Draw right stick area
+    canvas.create_oval(650, 150, 850, 350, outline="black")
+    canvas.create_oval(725, 225, 775, 275, outline="black", dash=(2, 2))
+    right_stick_indicator = canvas.create_oval(
+        740, 240, 760, 260, fill="black")
 
     update_joystick_visualization()
 
