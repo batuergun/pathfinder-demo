@@ -28,7 +28,6 @@ if pygame.joystick.get_count() > 0:
     joystick.init()
 else:
     print("No joystick connected")
-    exit(1)
 
 continuous_sending = False
 
@@ -137,13 +136,30 @@ options_menu.add_command(label="Adjust Default Motor Values",
 
 def update_motor_values_from_joystick():
     # Read the joystick axes
-    raw_axis_values = [joystick.get_axis(i) for i in range(4)]
+
+    if pygame.joystick.get_count() > 0:
+        raw_axis_values = [joystick.get_axis(i) for i in range(4)]
+    else:
+        raw_axis_values = [0, 0, 0, 0]
 
     # Apply deadzone and offsets
     adjusted_axis_values = apply_deadzone_and_offsets(raw_axis_values)
 
-    default_motor_values = [50 + int(50 * axis_value)
-                            for axis_value in adjusted_axis_values]
+    strafe, vertical, rotation, forward_reverse = adjusted_axis_values
+
+    default_motor_values = [
+        int(49 + 50 * (forward_reverse - strafe - vertical + rotation)  * -1),  # Front-left motor
+        int(47 + 50 * (forward_reverse + strafe - vertical - rotation)  * -1),  # Front-right motor
+        int(50 + 50 * (forward_reverse - strafe - vertical + rotation)),  # Rear-left motor
+        int(50 + 50 * (forward_reverse + strafe - vertical - rotation)),  # Rear-right motor
+        int(46 + 50 * (forward_reverse - strafe + vertical + rotation) * -1),  # Front-left motor (bottom)
+        int(49 + 50 * (forward_reverse + strafe + vertical + rotation) * -1),  # Front-right motor (bottom)
+        int(47 + 50 * (forward_reverse - strafe + vertical + rotation)),  # Rear-left motor (bottom)
+        int(47 + 50 * (forward_reverse + strafe + vertical + rotation)),  # Rear-right motor (bottom)
+    ]
+
+    # default_motor_values = [50 + int(50 * axis_value)
+    #                         for axis_value in adjusted_axis_values]
 
     # Update the sliders with the new motor values
     for slider, value in zip(motor_sliders, default_motor_values):
