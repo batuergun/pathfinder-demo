@@ -13,7 +13,7 @@ Initialization & checksum steps;
 - Dashboard init
 ```
 
-# **Repo insctructions**
+# **Repo Instructions**
 
 ## **Builds:**
 ### **pathfinder**: Onboard rp2040 build
@@ -24,3 +24,8 @@ Initialization & checksum steps;
 ### **socketClient**: Socket client demo executable
 ### **socketDemo**: TCP socket host executable
 
+## Python environment setup
+
+```
+pip install -r requirements.txt
+```
